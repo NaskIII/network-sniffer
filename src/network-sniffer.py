@@ -13,29 +13,24 @@ from rich.table import Table
 import keyboard as kb
 import collections
 
-default_config = {"graph_width": 100, "panel_border": "#d600ff"}  # Aumentando a largura dos gráficos
+default_config = {"graph_width": 100, "panel_border": "#d600ff"}
 exit_script = False
 packet_counts = {"incoming": 0, "outgoing": 0}
-last_10_packets = collections.deque(maxlen=10)  # Para armazenar os últimos 10 pacotes
+last_10_packets = collections.deque(maxlen=10) 
 
-# Configuração para armazenar pacotes recebidos e enviados com limite
 MAX_PACKETS = 20
 packet_buffer_in = collections.deque(maxlen=MAX_PACKETS)
 packet_buffer_out = collections.deque(maxlen=MAX_PACKETS)
 
-# Endereços IP dos hosts que serão monitorados (se fornecidos)
 MONITORED_HOSTS = []
 
-# Captura pacotes e conta tráfego de entrada e saída
 def packet_sniffer(packet):
     global packet_counts, last_10_packets
 
-    # Filtra pacotes entre hosts específicos ou entre todos os pacotes da rede
     if packet.haslayer(scapy.IP):
         src_ip = packet[scapy.IP].src
         dst_ip = packet[scapy.IP].dst
 
-        # Se MONITORED_HOSTS estiver vazio, captura pacotes da rede inteira
         if not MONITORED_HOSTS or (src_ip in MONITORED_HOSTS and dst_ip in MONITORED_HOSTS):
             packet_info = {"src": src_ip, "dst": dst_ip}
             last_10_packets.append(packet_info)
@@ -45,11 +40,9 @@ def packet_sniffer(packet):
             else:
                 packet_counts["outgoing"] += 1
 
-# Função para iniciar a captura de pacotes em uma thread separada
 def start_sniffing():
     scapy.sniff(prn=packet_sniffer, store=False, iface="Ethernet") # Interface de rede monitorada
 
-# Descobre dispositivos na rede usando ARP Scan
 def discover_devices():
     devices = []
     arp_request = scapy.ARP(pdst="192.168.0.1/24")  # Utilize o Gateway da rede
@@ -62,7 +55,6 @@ def discover_devices():
     
     return devices
 
-# Monta tabela de dispositivos conectados
 def create_device_table():
     table = Table(title="Dispositivos na Rede", box=box.ROUNDED, border_style=default_config["panel_border"])
     table.add_column("IP", style="cyan", no_wrap=True)
@@ -73,11 +65,10 @@ def create_device_table():
     
     return table
 
-# Painel para gráficos de pacotes
 def draw_graph_panel(data, graph_name, color):
     acp_config = {
-        "width": default_config["graph_width"],  # Aumentando o tamanho do gráfico
-        "format": "{:5.0f} p/s",  # Converte o float para inteiro sem erro
+        "width": default_config["graph_width"],
+        "format": "{:5.0f} p/s",
     }
 
     return Panel(
@@ -87,17 +78,14 @@ def draw_graph_panel(data, graph_name, color):
         style=color,
     )
 
-# Sair do programa
 def exit_app():
     global exit_script
     exit_script = True
     os._exit(0)
 
-# Controle do usuário
 def user_controls():
     kb.add_hotkey("tab", exit_app)
 
-# Função para exibir as últimas informações de pacotes
 def create_packet_info_panel():
     panel_content = "\n".join(
         [f"[bold][yellow]Origem:[/bold][/yellow] {packet['src']} - [bold][yellow]Destino:[/bold][/yellow] {packet['dst']}" 
@@ -110,17 +98,16 @@ def create_packet_info_panel():
         title="[bold][yellow]Últimos 10 Pacotes[/bold][/yellow]",
     )
 
-# Loop principal da interface
 def main():
     global exit_script, packet_buffer_in, packet_buffer_out, last_10_packets
 
     layout = Layout()
     layout.split(
-        Layout(name="header", size=3),  # O header agora ocupa toda a largura disponível
+        Layout(name="header", size=3),
         Layout(name="main", ratio=1),
         Layout(name="footer", size=3),
     )
-    layout["main"].split_row(Layout(name="info", ratio=2), Layout(name="graphs", ratio=3))  # Aumenta a proporção dos gráficos
+    layout["main"].split_row(Layout(name="info", ratio=2), Layout(name="graphs", ratio=3))
     layout["graphs"].split_column(Layout(name="recv_graph"), Layout(name="sent_graph"))
     layout["info"].split(Layout(name="net_usage", size=3), Layout(name="devices_table", ratio=1), Layout(name="packet_info", ratio=1))
 
@@ -140,21 +127,17 @@ def main():
 
     user_controls()
 
-    # Inicia sniffing em uma thread separada
     sniff_thread = threading.Thread(target=start_sniffing, daemon=True)
     sniff_thread.start()
 
     with Live(layout, refresh_per_second=60, screen=True) as live:
         while not exit_script:
-            # Atualiza os buffers de pacotes
             packet_buffer_in.append(packet_counts["incoming"])
             packet_buffer_out.append(packet_counts["outgoing"])
 
-            # Limpa os contadores de pacotes para a próxima captura
             packet_counts["incoming"] = 0
             packet_counts["outgoing"] = 0
 
-            # Atualiza o layout com os gráficos, informações de rede, dispositivos conectados e últimos pacotes
             layout["recv_graph"].update(
                 draw_graph_panel(packet_buffer_in, "Pacotes Recebidos", "#00ff9f")
             )
@@ -181,5 +164,5 @@ def main():
 
 if __name__ == "__main__":
     # Use essa variável para montorar 2 hosts. Caso seja vazio, monitora a rede inteira.
-    # MONITORED_HOSTS = ["52.67.164.66", "192.168.0.2"]  # Ajuste conforme necessário
+    # MONITORED_HOSTS = ["52.67.164.66", "192.168.0.2"]
     main()
